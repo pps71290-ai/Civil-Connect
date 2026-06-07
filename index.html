@@ -543,6 +543,19 @@
   .followbtn{display:inline-flex;align-items:center;gap:7px;border-radius:11px;padding:11px 18px;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;border:1.5px solid}
   .followbtn.no{background:#fff;color:var(--navy);border-color:var(--accent)}
   .followbtn.yes{background:var(--amber-soft);color:var(--accent-deep);border-color:#ffd9bd}
+
+  /* ===== SEARCHABLE COMBOBOX ===== */
+  .combo{position:relative;min-width:160px}
+  .combo-inp{width:100%;border:1.5px solid var(--line);border-radius:11px;padding:11px 30px 11px 13px;font-family:inherit;font-weight:600;font-size:13.5px;color:var(--ink-2);outline:0;background:#fff}
+  .combo-inp:focus{border-color:var(--accent)}
+  .combo-inp::placeholder{color:var(--muted-2)}
+  .combo-ar{position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--muted-2);font-size:10px;pointer-events:none}
+  .combo-menu{display:none;position:absolute;top:calc(100% + 5px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);z-index:45;max-height:250px;overflow-y:auto;padding:5px}
+  .combo-menu.open{display:block}
+  .combo-opt{padding:10px 12px;border-radius:8px;font-size:13.5px;font-weight:600;color:var(--ink-2);cursor:pointer}
+  .combo-opt:hover{background:var(--bg)}
+  .combo-opt.any{color:var(--muted)}
+  .combo-empty{padding:11px 12px;font-size:13px;color:var(--muted-2)}
 </style>
 </head>
 <body>
@@ -615,7 +628,7 @@
 
 <script>
 /* ================= STORE ================= */
-const KEY='civilconnect_db_v10';
+const KEY='civilconnect_db_v11';
 const COLORS=['#2d4f86','#8B005B','#0FA968','#F0631F','#5b3da8','#0c7a8a','#c0392b'];
 let db;
 function uid(){return Math.random().toString(36).slice(2,9)}
@@ -696,7 +709,9 @@ function buildSeed(posters,seekers,admin,jobs,reviews,bookings,payments){
   ['p1','p4'].forEach(id=>{const x=users.find(u=>u.id===id);if(x)x.featured=true});
   ['j1','j5'].forEach(id=>{const j=jobs.find(x=>x.id===id);if(j)j.featured=true});
   users.filter(u=>u.role==='poster').forEach(u=>{
-    u.availability={days:{Mon:true,Tue:true,Wed:true,Thu:true,Fri:true,Sat:true,Sun:false},start:'10:00',end:'19:00',slotMins:30,blocked:[]};
+    u.availability={slotMins:30,blocked:[],days:{
+      Mon:{on:true,start:'10:00',end:'19:00'},Tue:{on:true,start:'10:00',end:'19:00'},Wed:{on:true,start:'10:00',end:'19:00'},
+      Thu:{on:true,start:'10:00',end:'19:00'},Fri:{on:true,start:'10:00',end:'18:00'},Sat:{on:true,start:'11:00',end:'15:00'},Sun:{on:false,start:'10:00',end:'14:00'}}};
     u.bank='';
     u.services.forEach(s=>{if(!s.duration)s.duration=s.name.includes('Call')?10:s.name.includes('Resume')?30:45});
   });
@@ -715,7 +730,7 @@ function buildSeed(posters,seekers,admin,jobs,reviews,bookings,payments){
     {id:uid(),posterId:'p2',amount:200,bank:'SBI ****9911',status:'processing',created:Date.now()-3600000*8}];
   const disputes=[{id:uid(),seekerId:'s3',posterId:'p1',serviceName:'10-min Career Call',amount:299,reason:'Mentor 10 min late tha, session adhoora raha.',status:'open',resolution:'',created:Date.now()-3600000*20}];
   const announcements=[{id:uid(),audience:'all',text:'Welcome to CivilConnect! Is week 3 naye top mentors add hue.',created:Date.now()-86400000*2}];
-  const settings={commission:15,escrowDays:3,platformName:'CivilConnect',gstin:'23ABCDE1234F1Z5'};
+  const settings={commission:15,escrowDays:3,platformName:'CivilConnect',gstin:'23ABCDE1234F1Z5',rescheduleFee:50};
   const adminLog=[{id:uid(),text:'Platform initialised',created:Date.now()-86400000*30}];
   const threads=[{id:'th1',seekerId:'s2',posterId:'p1',created:Date.now()-86400000,updated:Date.now()-3600000*4,messages:[
     {id:uid(),from:'s2',text:'Hi Anjali maam, main L&T me site engineer role ke liye apply karna chahti hoon. 10-min call book karne se pehle ek doubt tha.',created:Date.now()-86400000,read:true},
@@ -727,7 +742,7 @@ function loadDB(){let l=null;try{const r=localStorage.getItem(KEY);if(r)l=JSON.p
 function me(){return db.users.find(u=>u.id===db.session)}
 function user(id){return db.users.find(u=>u.id===id)}
 function posterRating(pid){const rs=db.reviews.filter(r=>r.posterId===pid);if(!rs.length)return{avg:0,n:0};return{avg:(rs.reduce((a,r)=>a+r.rating,0)/rs.length),n:rs.length}}
-function login(id){db.session=id;state.resumeDraft=null;state.actTab='saved';state.svcTab='services';state.editJobId=null;state.adminSec='overview';state.learnCat='All';state.quiz=null;state.filters={q:'',location:'',type:'',sort:'recent'};persist();route(roleHome())}
+function login(id){db.session=id;state.resumeDraft=null;state.actTab='saved';state.svcTab='services';state.editJobId=null;state.adminSec='overview';state.learnCat='All';state.quiz=null;state.mfilter={q:'',skill:'',company:'',service:'',price:0,minR:0,sort:'rating'};state.filters={q:'',location:'',type:'',sort:'recent'};persist();route(roleHome())}
 function logout(){db.session=null;state.resumeDraft=null;persist();route('home')}
 function roleHome(){const u=me();return !u?'home':u.role==='seeker'?'seekerhome':u.role==='poster'?'dashboard':'admin'}
 
@@ -754,7 +769,8 @@ const state={view:'home',param:null,signup:{step:0,role:null,skills:[],services:
   filters:{q:'',location:'',type:'',sort:'recent'},actTab:'saved',resched:null,
   editJobId:null,svcTab:'services',appJob:null,editSvc:null,
   adminSec:'overview',userTab:'seeker',userFilter:'all',finTab:'transactions',jobFilter:'all',
-  learnCat:'All',quiz:null,adminQ:''};
+  learnCat:'All',quiz:null,adminQ:'',
+  mfilter:{q:'',skill:'',company:'',service:'',price:0,minR:0,sort:'rating'}};
 function route(view,param){state.view=view;state.param=param||null;window.scrollTo(0,0);renderNav();render()}
 function render(){
   const v=state.view;const u=me();
@@ -842,25 +858,55 @@ function vHome(){
   </div>
   <div class="lfooter">CivilConnect · Made for civil engineers in India 🇮🇳</div>`;
 }
-function vExplore(){
-  return `<div class="pagehead"><h1>Industry Experts</h1><p>Civil engineering seniors offering paid guidance. Filter by rating.</p></div>
-  <div class="chips" id="expchips">${[['0','All'],['4.8','⭐ 4.8+'],['4.5','⭐ 4.5+'],['4','⭐ 4.0+']].map((c,i)=>`<div class="chip ${i===0?'active':''}" onclick="filterExp(${c[0]},this)">${c[1]}</div>`).join('')}</div>
-  <div class="grid g3" id="explist">${expertList(0)}</div>`;
+function vExplore(){const f=state.mfilter;
+  const mentors=db.users.filter(u=>u.role==='poster'&&!u.blocked);
+  const skills=[...new Set(mentors.flatMap(m=>m.skills||[]))].sort();
+  const companies=[...new Set(mentors.map(m=>m.company).filter(Boolean))].sort();
+  return `<div class="pagehead"><h1>Find a Mentor</h1><p>India ke top builders ke seniors — sahi mentor dhundo aur connect karo.</p></div>
+  <div class="filterbar">
+    <div class="fsearch">🔎<input value="${f.q}" placeholder="Name, company, skill..." oninput="setMF('q',this.value)"></div>
+    ${combo('mskill',skills.map(s=>({v:s,l:s})),f.skill,'All expertise',v=>setMF('skill',v))}
+    ${combo('mcompany',companies.map(c=>({v:c,l:c})),f.company,'All companies',v=>setMF('company',v))}
+    ${combo('mservice',[{v:'Call',l:'Career Call'},{v:'Resume',l:'Resume Review'},{v:'Skill',l:'Skill Check'},{v:'Mock',l:'Mock Interview'}],f.service,'Any service',v=>setMF('service',v))}
+    <select onchange="setMF('price',parseInt(this.value))"><option value="0">Any price</option><option value="300" ${f.price===300?'selected':''}>≤ ₹300</option><option value="500" ${f.price===500?'selected':''}>≤ ₹500</option><option value="1000" ${f.price===1000?'selected':''}>≤ ₹1000</option></select>
+    <select onchange="setMF('sort',this.value)"><option value="rating" ${f.sort==='rating'?'selected':''}>Top rated</option><option value="priceLow" ${f.sort==='priceLow'?'selected':''}>Price: low→high</option><option value="exp" ${f.sort==='exp'?'selected':''}>Most experienced</option><option value="reviews" ${f.sort==='reviews'?'selected':''}>Most reviewed</option></select>
+  </div>
+  <div class="chips" id="expchips">${[['0','All ratings'],['4.8','⭐ 4.8+'],['4.5','⭐ 4.5+'],['4','⭐ 4.0+']].map(c=>`<div class="chip ${f.minR==(+c[0])?'active':''}" onclick="setMRating(${c[0]},this)">${c[1]}</div>`).join('')}
+    ${(f.q||f.skill||f.company||f.service||f.price||f.minR)?'<div class="chip" style="border-color:#f3d3d3;color:#c0392b" onclick="clearMF()">✕ Clear all</div>':''}</div>
+  <div style="font-size:13px;color:var(--muted);font-weight:600;margin-bottom:12px" id="mcount">${applyMentorFilters().length} mentors</div>
+  <div class="grid g3" id="explist">${mentorListHTML()}</div>`;
 }
-function expertList(min){
-  const list=db.users.filter(u=>u.role==='poster'&&!u.blocked&&posterRating(u.id).avg>=min);
-  if(!list.length)return `<div class="empty" style="grid-column:1/-1"><div class="ei">🔍</div>No experts match this rating yet.</div>`;
-  return list.map(p=>expertCard(p)).join('');
-}
-function filterExp(min,el){document.querySelectorAll('#expchips .chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');document.getElementById('explist').innerHTML=expertList(min)}
+function minSvcPrice(p){const on=p.services.filter(s=>s.on);return on.length?Math.min(...on.map(s=>s.price)):Infinity}
+function applyMentorFilters(){const f=state.mfilter;let list=db.users.filter(u=>u.role==='poster'&&!u.blocked);
+  if(f.q){const q=f.q.toLowerCase();list=list.filter(m=>(m.name+' '+m.company+' '+m.designation+' '+(m.skills||[]).join(' ')).toLowerCase().includes(q))}
+  if(f.skill)list=list.filter(m=>(m.skills||[]).includes(f.skill));
+  if(f.company)list=list.filter(m=>m.company===f.company);
+  if(f.service)list=list.filter(m=>m.services.some(s=>s.on&&s.name.toLowerCase().includes(f.service.toLowerCase())));
+  if(f.price)list=list.filter(m=>minSvcPrice(m)<=f.price);
+  if(f.minR)list=list.filter(m=>posterRating(m.id).avg>=f.minR);
+  const sort=f.sort||'rating';
+  list.sort((a,b)=>{
+    if(sort==='priceLow')return minSvcPrice(a)-minSvcPrice(b);
+    if(sort==='exp')return (parseInt(b.exp)||0)-(parseInt(a.exp)||0);
+    if(sort==='reviews')return posterRating(b.id).n-posterRating(a.id).n;
+    return posterRating(b.id).avg-posterRating(a.id).avg;
+  });
+  return list;}
+function mentorListHTML(){const list=applyMentorFilters();
+  if(!list.length)return `<div class="empty" style="grid-column:1/-1"><div class="ei">🔍</div>In filters se koi mentor nahi mila. <br><button class="btn btn-ghost btn-sm" style="margin-top:12px" onclick="clearMF()">Clear filters</button></div>`;
+  return list.map(expertCard).join('');}
+function setMF(k,v){state.mfilter[k]=v;document.getElementById('explist').innerHTML=mentorListHTML();document.getElementById('mcount').textContent=applyMentorFilters().length+' mentors';}
+function setMRating(v,el){state.mfilter.minR=+v;document.querySelectorAll('#expchips .chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');document.getElementById('explist').innerHTML=mentorListHTML();document.getElementById('mcount').textContent=applyMentorFilters().length+' mentors';}
+function clearMF(){state.mfilter={q:'',skill:'',company:'',service:'',price:0,minR:0,sort:'rating'};render();}
 function expertCard(p){
-  const r=posterRating(p.id);const minp=Math.min(...p.services.filter(s=>s.on).map(s=>s.price));
+  const r=posterRating(p.id);const minp=minSvcPrice(p);
   const init=p.name.split(' ').map(w=>w[0]).join('').slice(0,2);
   return `<div class="card click" onclick="route('expert','${p.id}')"><div class="expert">
     <div class="av" style="background:${p.color}">${init}</div>
     <div style="flex:1"><h3>${p.name} ${p.verified?'<span style="color:var(--razor);font-size:13px">✔</span>':''}</h3><div class="role">${p.designation} · ${p.company}</div>
     <div class="stars"><span class="s">★</span>${r.avg?r.avg.toFixed(1):'New'}<span>${r.n?'· '+r.n+' reviews':''}</span></div></div>
-    <div class="fromp"><small>FROM</small><b>₹${isFinite(minp)?minp:'—'}</b></div></div></div>`;
+    <div class="fromp"><small>FROM</small><b>₹${isFinite(minp)?minp:'—'}</b></div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)">${(p.skills||[]).slice(0,3).map(s=>`<span class="tag">${s}</span>`).join('')}<span class="tag" style="background:var(--amber-soft);border-color:#ffd9bd;color:#b65216">🎓 ${parseInt(p.exp)||0} yrs</span></div></div>`;
 }
 
 /* ================= AUTH ================= */
@@ -962,7 +1008,7 @@ function vJobs(){
   <div class="sect">All jobs</div>
   <div class="filterbar">
     <div class="fsearch">🔎<input placeholder="Search title, company..." value="${f.q}" oninput="setFilter('q',this.value)"></div>
-    <select onchange="setFilter('location',this.value)"><option value="">All locations</option>${locs.map(l=>`<option ${f.location===l?'selected':''}>${l}</option>`).join('')}</select>
+    ${combo('jloc',locs.map(l=>({v:l,l:l})),f.location,'All locations',v=>setFilter('location',v))}
     <select onchange="setFilter('type',this.value)"><option value="">All types</option><option ${f.type==='Full-time'?'selected':''}>Full-time</option><option ${f.type==='Internship'?'selected':''}>Internship</option></select>
     <select onchange="setFilter('sort',this.value)"><option value="recent">Newest</option></select>
     <button class="alertbtn" onclick="createAlert()">🔔 Save this search</button>
@@ -1068,10 +1114,10 @@ function startBook(pid,sid){
 function vBook(){
   const b=state.book;if(!b)return route('explore');const p=user(b.pid);const s=b.service;
   const days=genDays(p).map(l=>[l.split(' ')[0],l.split(' ')[1]]);
-  const slots=genSlots(p);
+  const slots=genSlots(p,b.day);
   const booked=db.bookings.filter(x=>x.posterId===b.pid&&x.day===b.day&&x.status==='upcoming').map(x=>x.slot);
   return `<div class="backlink" onclick="route('expert','${b.pid}')">← Back</div>
-  <div class="pagehead"><h1>Schedule your session</h1><p>${s.duration||30}-min · ${p.name} · ${p.availability?p.availability.start+'–'+p.availability.end:''}</p></div>
+  <div class="pagehead"><h1>Schedule your session</h1><p>${s.duration||30}-min session with ${p.name}</p></div>
   <div class="grid" style="grid-template-columns:1.5fr 1fr;gap:18px">
     <div class="card">
       <div class="sect" style="margin-top:0;font-size:16px">Select a day</div>
@@ -1090,11 +1136,19 @@ function vBook(){
 function pickDay(d){state.book.day=d;state.book.slot=null;render()}
 function pickSlot(t){state.book.slot=t;render()}
 function openPay(){const b=state.book;if(!b.slot){toast('Pehle time slot select karo');return}
+  state.payMode='booking';
   const s=b.service;const p=user(b.pid);
   document.getElementById('paydetails').innerHTML=`<div class="payline"><span>${s.name}</span><span>₹${s.price}</span></div><div class="payline"><span>with ${p.name}</span><span>${b.day} · ${b.slot}</span></div><div class="payline tot"><span>Total payable</span><span>₹${s.price}</span></div>`;
   document.getElementById('payfinal').textContent='₹'+s.price;openM('payOverlay');
 }
-function payDone(){closeM('payOverlay');const b=state.book;const s=b.service;const u=me();
+function payDone(){closeM('payOverlay');
+  if(state.payMode==='reschedule'){const rs=state.resched;const fee=db.settings.rescheduleFee||50;const u=me();const b=db.bookings.find(x=>x.id===rs.id);
+    b.day=rs.day;b.slot=rs.slot;
+    db.payments.push({id:uid(),fromId:u.id,toId:'admin',serviceName:'Reschedule fee (seeker)',amount:fee,status:'settled',created:Date.now()});
+    notify(b.posterId,`${u.name} ne session ${rs.day} · ${rs.slot} par reschedule ki.`,'reschedule');
+    state.payMode='booking';persist();toast(`Rescheduled ✓ · ₹${fee} paid`);render();return;
+  }
+  const b=state.book;const s=b.service;const u=me();
   const bk={id:uid(),seekerId:u.id,posterId:b.pid,serviceName:s.name,price:s.price,day:b.day,slot:b.slot,status:'upcoming',reviewed:false,created:Date.now()};
   db.bookings.push(bk);
   db.payments.push({id:uid(),fromId:u.id,toId:b.pid,serviceName:s.name,amount:s.price,status:'escrow',created:Date.now()});
@@ -1142,22 +1196,34 @@ function cancelBooking(id){const b=db.bookings.find(x=>x.id===id);
     persist();closeM('genOverlay');toast('Booking cancelled · refund initiated');render();
   });
 }
-function openReschedule(id){const b=db.bookings.find(x=>x.id===id);state.resched={id,day:b.day,slot:b.slot};renderReschedBody();openM('reschedOverlay')}
+function openReschedule(id){const b=db.bookings.find(x=>x.id===id);state.resched={id,day:b.day,slot:b.slot,by:'seeker'};renderReschedBody();openM('reschedOverlay')}
+function openMentorResched(id){const b=db.bookings.find(x=>x.id===id);state.resched={id,day:b.day,slot:b.slot,by:'mentor'};renderReschedBody();openM('reschedOverlay')}
 function renderReschedBody(){const rs=state.resched;const b=db.bookings.find(x=>x.id===rs.id);const p=user(b.posterId);
   const days=genDays(p).map(l=>[l.split(' ')[0],l.split(' ')[1]]);
-  const slots=genSlots(p);
+  const slots=genSlots(p,rs.day);
   const booked=db.bookings.filter(x=>x.posterId===b.posterId&&x.day===rs.day&&x.status==='upcoming'&&x.id!==b.id).map(x=>x.slot);
-  document.getElementById('reschedbody').innerHTML=`
+  const fee=db.settings.rescheduleFee||50;
+  const feeNote=rs.by==='seeker'?`<div class="socnote" style="background:var(--amber-soft);border-color:#ffd9bd;color:#b65216;margin-bottom:12px">ℹ️ Reschedule par <b>₹${fee}</b> charge lagega — Razorpay se pay karna hoga.</div>`:`<div class="socnote" style="background:var(--amber-soft);border-color:#ffd9bd;color:#b65216;margin-bottom:12px">ℹ️ Reschedule par <b>₹${fee}</b> aapke balance se kat jayega.</div>`;
+  document.getElementById('reschedbody').innerHTML=`${feeNote}
     <p style="font-size:13px;color:var(--muted);margin-bottom:12px">New day & time choose karo for <b>${b.serviceName}</b>.</p>
-    <div class="daypick">${days.map(d=>`<div class="day ${(d[0]+' '+d[1])===rs.day?'sel':''}" onclick="reschedDay('${d[0]} ${d[1]}')"><small>${d[0]}</small><b>${d[1]}</b></div>`).join('')}</div>
-    <div class="slotgrid" style="margin-top:14px">${slots.map(t=>`<div class="slot ${booked.includes(t)?'off':(rs.slot===t?'sel':'')}" ${booked.includes(t)?'':`onclick="reschedSlot('${t}')"`}>${t}</div>`).join('')}</div>`;
+    <div class="daypick">${days.length?days.map(d=>`<div class="day ${(d[0]+' '+d[1])===rs.day?'sel':''}" onclick="reschedDay('${d[0]} ${d[1]}')"><small>${d[0]}</small><b>${d[1]}</b></div>`).join(''):'<p style="font-size:13px;color:var(--muted)">No available days.</p>'}</div>
+    <div class="slotgrid" style="margin-top:14px">${slots.length?slots.map(t=>`<div class="slot ${booked.includes(t)?'off':(rs.slot===t?'sel':'')}" ${booked.includes(t)?'':`onclick="reschedSlot('${t}')"`}>${t}</div>`).join(''):'<p style="font-size:13px;color:var(--muted)">Is din koi slot nahi.</p>'}</div>`;
 }
 function reschedDay(d){state.resched.day=d;state.resched.slot=null;renderReschedBody()}
 function reschedSlot(t){state.resched.slot=t;renderReschedBody()}
 function confirmReschedule(){const rs=state.resched;if(!rs.slot){toast('Pehle slot select karo');return}
-  const b=db.bookings.find(x=>x.id===rs.id);b.day=rs.day;b.slot=rs.slot;
-  notify(b.posterId,`A session was rescheduled to ${rs.day} · ${rs.slot}.`,'reschedule');
-  persist();closeM('reschedOverlay');toast('Rescheduled ✓');render();
+  const fee=db.settings.rescheduleFee||50;
+  if(rs.by==='mentor'){const u=me();const b=db.bookings.find(x=>x.id===rs.id);
+    db.payouts=db.payouts||[];db.payouts.push({id:uid(),posterId:u.id,amount:fee,bank:'Reschedule charge',status:'paid',type:'fee',created:Date.now()});
+    b.day=rs.day;b.slot=rs.slot;
+    db.payments.push({id:uid(),fromId:u.id,toId:'admin',serviceName:'Reschedule fee (mentor)',amount:fee,status:'settled',created:Date.now()});
+    notify(b.seekerId,`Mentor ne aapki session ${rs.day} · ${rs.slot} par reschedule ki.`,'reschedule');
+    persist();closeM('reschedOverlay');toast(`Rescheduled ✓ · ₹${fee} balance se kata`);render();
+  }else{
+    closeM('reschedOverlay');state.payMode='reschedule';
+    document.getElementById('paydetails').innerHTML=`<div class="payline"><span>Reschedule fee</span><span>₹${fee}</span></div><div class="payline"><span>New slot</span><span>${rs.day} · ${rs.slot}</span></div><div class="payline tot"><span>Total payable</span><span>₹${fee}</span></div>`;
+    document.getElementById('payfinal').textContent='₹'+fee;openM('payOverlay');
+  }
 }
 function showConfirm(title,msg,onYes){document.getElementById('gentitle').textContent=title;
   document.getElementById('genbody').innerHTML=`<p style="font-size:14px;color:var(--ink-2);line-height:1.5;margin-bottom:18px">${msg}</p><div style="display:flex;gap:10px"><button class="btn btn-ghost" style="flex:1" onclick="closeM('genOverlay')">No</button><button class="btn btn-danger" style="flex:1" id="confirmYes">Yes, confirm</button></div>`;
@@ -1286,13 +1352,17 @@ function vServices(){const u=me();const t=state.svcTab;const a=av(u);
     </div>
     <p style="font-size:12.5px;color:var(--muted);margin-top:14px">✓ Changes auto-save. Seeker ko aapki profile par live dikhega.</p>`;
   }else{
-    const wd=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const wd=[['Mon','Monday'],['Tue','Tuesday'],['Wed','Wednesday'],['Thu','Thursday'],['Fri','Friday'],['Sat','Saturday'],['Sun','Sunday']];
     const upcoming=[['Mon','9'],['Tue','10'],['Wed','11'],['Thu','12'],['Fri','13'],['Sat','14']];
     body=`<div class="card" style="max-width:720px">
-      <h4 style="font-family:'Bricolage Grotesque';font-size:16px;margin-bottom:12px">Working days</h4>
-      <div class="mchips" style="margin-bottom:20px">${wd.map(d=>`<div class="mchip ${a.days[d]?'sel':''}" onclick="toggleDay('${d}')">${d}</div>`).join('')}</div>
-      <div class="twocol"><div class="field"><label>Start time</label><input type="time" value="${a.start}" onchange="setAvail('start',this.value)"></div><div class="field"><label>End time</label><input type="time" value="${a.end}" onchange="setAvail('end',this.value)"></div></div>
-      <div class="field"><label>Slot duration</label><select onchange="setAvail('slotMins',parseInt(this.value))">${[15,30,45,60].map(m=>`<option value="${m}" ${a.slotMins===m?'selected':''}>${m} min</option>`).join('')}</select></div>
+      <h4 style="font-family:'Bricolage Grotesque';font-size:16px;margin-bottom:6px">Daily availability</h4>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Har din ka alag time set karo. Off din par koi booking nahi hoga.</p>
+      ${wd.map(d=>{const dd=a.days[d[0]];return `<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)">
+        <div class="switch ${dd.on?'on':''}" onclick="toggleDay('${d[0]}')"></div>
+        <div style="width:90px;font-weight:700;font-size:13.5px;color:${dd.on?'var(--ink)':'var(--muted-2)'}">${d[1]}</div>
+        ${dd.on?`<div style="display:flex;align-items:center;gap:8px;margin-left:auto"><input type="time" value="${dd.start}" onchange="setDayTime('${d[0]}','start',this.value)" style="border:1.5px solid var(--line);border-radius:9px;padding:7px 9px;font-family:inherit;font-size:13px;outline:0"><span style="color:var(--muted)">to</span><input type="time" value="${dd.end}" onchange="setDayTime('${d[0]}','end',this.value)" style="border:1.5px solid var(--line);border-radius:9px;padding:7px 9px;font-family:inherit;font-size:13px;outline:0"></div>`:`<div style="margin-left:auto;font-size:12.5px;color:var(--muted-2);font-weight:600">Off</div>`}
+      </div>`}).join('')}
+      <div class="field" style="margin:16px 0 0"><label>Slot duration (har session ka gap)</label><select onchange="setAvail('slotMins',parseInt(this.value))">${[15,30,45,60].map(m=>`<option value="${m}" ${a.slotMins===m?'selected':''}>${m} min</option>`).join('')}</select></div>
       <h4 style="font-family:'Bricolage Grotesque';font-size:16px;margin:18px 0 10px">Block specific upcoming days</h4>
       <div class="mchips">${upcoming.map(d=>{const lbl=d[0]+' '+d[1];const blocked=(a.blocked||[]).includes(lbl);return `<div class="mchip ${blocked?'sel':''}" onclick="toggleBlock('${lbl}')" style="${blocked?'background:#c0392b;border-color:#c0392b':''}">${blocked?'🚫 ':''}${lbl}</div>`}).join('')}</div>
       <div class="socnote" style="margin-top:16px">⚙️ Ye settings seedhe booking slots ko control karti hain — seeker ko sirf yahi available slots dikhenge.</div>
@@ -1302,10 +1372,10 @@ function vServices(){const u=me();const t=state.svcTab;const a=av(u);
 }
 function setPrice(id,v){const u=me();const s=u.services.find(x=>x.id===id);s.price=parseInt(v)||0;persist();toast('Price updated ✓')}
 function toggleSvc(id,el){const u=me();const s=u.services.find(x=>x.id===id);s.on=!s.on;el.classList.toggle('on');persist()}
-function vPBookings(){const u=me();const list=db.bookings.filter(b=>b.posterId===u.id).sort((a,b)=>b.created-a.created);
-  return `<div class="pagehead"><h1>Your Sessions</h1><p>Bookings from seekers — slots auto-blocked.</p></div>
+function vPBookings(){const u=me();const list=db.bookings.filter(b=>b.posterId===u.id).sort((a,b)=>b.created-a.created);const fee=db.settings.rescheduleFee||50;
+  return `<div class="pagehead"><h1>Your Sessions</h1><p>Bookings from seekers — slots auto-blocked. Reschedule par ₹${fee} balance se katega.</p></div>
   ${list.length?list.map(b=>{const s=user(b.seekerId);const init=s?s.name.split(' ').map(w=>w[0]).join('').slice(0,2):'?';
-    return `<div class="row"><div class="ra" style="background:${s?s.color:'#888'}">${init}</div><div><h4>${s?s.name:'Seeker'}</h4><small>${b.serviceName} · ₹${b.price}</small></div><div class="rowact"><span class="meta">📅 ${b.day} · ${b.slot}</span><span class="vbadge ${b.status==='upcoming'?'pend':'ok'}">${b.status==='upcoming'?'UPCOMING':'COMPLETED'}</span></div></div>`}).join(''):`<div class="empty"><div class="ei">📅</div>No bookings yet.</div>`}`;
+    return `<div class="row"><div class="ra" style="background:${s?s.color:'#888'}">${init}</div><div><h4>${s?s.name:'Seeker'}</h4><small>${b.serviceName} · ₹${b.price}</small></div><div class="rowact"><span class="meta">📅 ${b.day} · ${b.slot}</span>${b.status==='upcoming'?`<button class="btn btn-ghost btn-sm" onclick="openMentorResched('${b.id}')">🔄 Reschedule</button>`:''}<span class="vbadge ${b.status==='upcoming'?'pend':b.status==='cancelled'?'blk':'ok'}">${b.status.toUpperCase()}</span></div></div>`}).join(''):`<div class="empty"><div class="ei">📅</div>No bookings yet.</div>`}`;
 }
 function vPReviews(){const u=me();const r=posterRating(u.id);const revs=db.reviews.filter(x=>x.posterId===u.id).sort((a,b)=>b.created-a.created);
   return `<div class="pagehead"><h1>My Reviews</h1></div>
@@ -1497,12 +1567,13 @@ function secSettings(){const s=db.settings;
   <div class="card" style="max-width:560px">
     <div class="field"><label>Platform commission (%)</label><input id="set-comm" type="number" value="${s.commission}"></div>
     <div class="field"><label>Escrow auto-release (days)</label><input id="set-esc" type="number" value="${s.escrowDays}"></div>
+    <div class="field"><label>Reschedule fee (₹) — seeker pays / mentor balance deduct</label><input id="set-resched" type="number" value="${s.rescheduleFee!=null?s.rescheduleFee:50}"></div>
     <div class="field"><label>Platform name</label><input id="set-name" value="${s.platformName}"></div>
     <div class="field"><label>GSTIN (for invoices)</label><input id="set-gst" value="${s.gstin}"></div>
     <button class="btn btn-dark btn-block" onclick="saveSettings()">Save settings</button>
   </div>`;
 }
-function saveSettings(){const s=db.settings;s.commission=parseInt(document.getElementById('set-comm').value)||0;s.escrowDays=parseInt(document.getElementById('set-esc').value)||0;s.platformName=document.getElementById('set-name').value||'CivilConnect';s.gstin=document.getElementById('set-gst').value;alog('Updated platform settings');persist();toast('Settings saved ✓');render()}
+function saveSettings(){const s=db.settings;s.commission=parseInt(document.getElementById('set-comm').value)||0;s.escrowDays=parseInt(document.getElementById('set-esc').value)||0;s.rescheduleFee=parseInt(document.getElementById('set-resched').value)||0;s.platformName=document.getElementById('set-name').value||'CivilConnect';s.gstin=document.getElementById('set-gst').value;alog('Updated platform settings');persist();toast('Settings saved ✓');render()}
 
 /* --- Audit --- */
 function secAudit(){return `<div class="pagehead"><h1>Audit Log</h1><p>All admin actions</p></div>
@@ -1933,15 +2004,17 @@ function saveSvc(){const u=me();const name=document.getElementById('sv-name').va
 function delSvc(id){const u=me();u.services=u.services.filter(x=>x.id!==id);persist();closeM('genOverlay');toast('Service deleted');render()}
 
 /* --- Availability --- */
-function av(u){return u.availability||(u.availability={days:{Mon:true,Tue:true,Wed:true,Thu:true,Fri:true,Sat:true,Sun:false},start:'10:00',end:'19:00',slotMins:30,blocked:[]})}
+function av(u){if(!u.availability||!u.availability.days||typeof u.availability.days.Mon!=='object'){u.availability={slotMins:30,blocked:[],days:{Mon:{on:true,start:'10:00',end:'19:00'},Tue:{on:true,start:'10:00',end:'19:00'},Wed:{on:true,start:'10:00',end:'19:00'},Thu:{on:true,start:'10:00',end:'19:00'},Fri:{on:true,start:'10:00',end:'19:00'},Sat:{on:true,start:'11:00',end:'15:00'},Sun:{on:false,start:'10:00',end:'14:00'}}};}return u.availability}
 function setSvcTab(t){state.svcTab=t;render()}
-function toggleDay(d){const a=av(me());a.days[d]=!a.days[d];persist();render()}
+function toggleDay(d){const a=av(me());a.days[d].on=!a.days[d].on;persist();render()}
+function setDayTime(d,field,v){const a=av(me());a.days[d][field]=v;persist();toast('Availability updated ✓')}
 function setAvail(f,v){const a=av(me());a[f]=v;persist();toast('Availability updated ✓')}
 function toggleBlock(lbl){const a=av(me());a.blocked=a.blocked||[];const i=a.blocked.indexOf(lbl);if(i>-1)a.blocked.splice(i,1);else a.blocked.push(lbl);persist();render()}
-function genSlots(p){const a=av(p);const[sh,sm]=a.start.split(':').map(Number);const[eh,em]=a.end.split(':').map(Number);
+function genSlots(p,dayLabel){const a=av(p);const wd=(dayLabel||'').split(' ')[0];const dd=a.days[wd];if(!dd||!dd.on)return [];
+  const[sh,sm]=dd.start.split(':').map(Number);const[eh,em]=dd.end.split(':').map(Number);
   let start=sh*60+sm,end=eh*60+em,out=[];for(let t=start;t+a.slotMins<=end;t+=a.slotMins){let h=Math.floor(t/60),m=t%60,hh=h>12?h-12:h;out.push(hh+':'+String(m).padStart(2,'0'))}return out;}
 function genDays(p){const a=av(p);const all=[['Mon','9'],['Tue','10'],['Wed','11'],['Thu','12'],['Fri','13'],['Sat','14'],['Sun','15']];
-  return all.filter(d=>a.days[d[0]]).map(d=>d[0]+' '+d[1]).filter(l=>!(a.blocked||[]).includes(l));}
+  return all.filter(d=>a.days[d[0]]&&a.days[d[0]].on).map(d=>d[0]+' '+d[1]).filter(l=>!(a.blocked||[]).includes(l));}
 
 /* --- Earnings, payouts, invoices --- */
 function vEarnings(){const u=me();
@@ -2031,6 +2104,31 @@ function viewFollowers(){const u=me();const list=followersOf(u.id);document.getE
     return `<div class="appcand"><div class="aa" style="background:${s.color}">${init}</div><div style="flex:1"><h4 style="font-size:14px;font-weight:700">${s.name}</h4><small style="font-size:12px;color:var(--muted)">${s.title||'Engineer'} · ${s.city||''}</small></div><button class="btn btn-ghost btn-sm" onclick="openChatWith('${s.id}')">💬 Message</button></div>`}).join(''):'<p style="font-size:13px;color:var(--muted)">No followers yet.</p>';
   openM('genOverlay');
 }
+
+/* ================= SEARCHABLE COMBOBOX ================= */
+let COMBOS={};
+function combo(id,options,curVal,placeholder,pick){
+  const cur=options.find(o=>String(o.v)===String(curVal));const curLabel=cur?cur.l:'';
+  COMBOS[id]={options,pick,curLabel};
+  return `<div class="combo">
+    <input class="combo-inp" id="ci-${id}" autocomplete="off" placeholder="${placeholder}" value="${curLabel}" oninput="comboType('${id}',this.value)" onfocus="comboType('${id}','')" onblur="comboBlur('${id}')">
+    <span class="combo-ar">▼</span>
+    <div class="combo-menu" id="cm-${id}"></div>
+  </div>`;
+}
+function comboItems(id,q){const c=COMBOS[id];if(!c)return '';q=(q||'').toLowerCase();
+  let html=`<div class="combo-opt any" onmousedown="comboPick('${id}',-1)">— Any / All —</div>`;
+  const matches=c.options.map((o,i)=>({o,i})).filter(x=>x.o.l.toLowerCase().includes(q));
+  html+=matches.map(x=>`<div class="combo-opt" onmousedown="comboPick('${id}',${x.i})">${x.o.l}</div>`).join('');
+  if(!matches.length)html+='<div class="combo-empty">No match for "'+q+'"</div>';
+  return html;}
+function comboType(id,q){const m=document.getElementById('cm-'+id);if(!m)return;m.innerHTML=comboItems(id,q);m.classList.add('open');}
+function comboPick(id,i){const c=COMBOS[id];const inp=document.getElementById('ci-'+id);const m=document.getElementById('cm-'+id);
+  if(i===-1){c.curLabel='';if(inp)inp.value='';c.pick('');}
+  else{const o=c.options[i];c.curLabel=o.l;if(inp)inp.value=o.l;c.pick(o.v);}
+  if(m)m.classList.remove('open');}
+function comboBlur(id){setTimeout(()=>{const c=COMBOS[id];if(!c)return;const inp=document.getElementById('ci-'+id);if(inp)inp.value=c.curLabel||'';const m=document.getElementById('cm-'+id);if(m)m.classList.remove('open');},180);}
+document.addEventListener('click',e=>{if(!e.target.closest||!e.target.closest('.combo'))document.querySelectorAll('.combo-menu.open').forEach(m=>m.classList.remove('open'))});
 
 /* ================= UTIL ================= */
 function openM(id){document.getElementById(id).classList.add('show')}
