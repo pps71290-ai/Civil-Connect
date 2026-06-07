@@ -7,6 +7,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- Firebase & EmailJS SDKs -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   :root{
     /* Brand Primary Colors */
@@ -1109,6 +1114,46 @@
 <div id="toast"></div>
 
 <script>
+/* ================= CONFIGURATION ================= */
+const FIREBASE_CONFIG = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_STORAGE_BUCKET",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+const EMAILJS_CONFIG = {
+  serviceId: "YOUR_SERVICE_ID",
+  templateId: "YOUR_TEMPLATE_ID",
+  publicKey: "YOUR_PUBLIC_KEY"
+};
+
+let firebaseActive = false;
+let auth, firestore;
+
+if (typeof firebase !== 'undefined' && FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith("YOUR_")) {
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    auth = firebase.auth();
+    firestore = firebase.firestore();
+    firebaseActive = true;
+    console.log("Firebase initialized successfully!");
+  } catch (err) {
+    console.error("Firebase initialization failed:", err);
+  }
+}
+
+if (typeof emailjs !== 'undefined' && EMAILJS_CONFIG.publicKey && !EMAILJS_CONFIG.publicKey.startsWith("YOUR_")) {
+  try {
+    emailjs.init(EMAILJS_CONFIG.publicKey);
+    console.log("EmailJS initialized successfully!");
+  } catch (err) {
+    console.error("EmailJS initialization failed:", err);
+  }
+}
+
 /* ================= STORE ================= */
 const KEY='workora_db_v13';
 const COLORS=['#2d4f86','#8B005B','#0FA968','#F0631F','#5b3da8','#0c7a8a','#c0392b'];
@@ -1117,39 +1162,39 @@ function uid(){return Math.random().toString(36).slice(2,9)}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
 function seed(){
   const posters=[
-    {id:'p1',role:'poster',name:'Anjali Sharma',company:'L&T Construction',designation:'Sr. Project Manager',city:'Mumbai',exp:'12 yrs',skills:['Project Mgmt','Site Execution'],color:'#2d4f86',verified:true,blocked:false,
+    {id:'p1',role:'poster',email:'poster@workora.com',name:'Anjali Sharma',company:'L&T Construction',designation:'Sr. Project Manager',city:'Mumbai',exp:'12 yrs',skills:['Project Mgmt','Site Execution'],color:'#2d4f86',verified:true,blocked:false,
      services:[{id:'sv1',name:'10-min Career Call',desc:'Quick guidance & referrals',price:299,icon:'📞',bg:'var(--amber-soft)',on:true},
                {id:'sv2',name:'Resume Review',desc:'Detailed feedback report',price:499,icon:'📄',bg:'#eaf0fb',on:true},
                {id:'sv3',name:'Skill Check / Mock',desc:'Technical evaluation',price:699,icon:'🎯',bg:'var(--green-soft)',on:true}],
      social:{linkedin:'in/anjali-sharma',insta:'',yt:''}},
-    {id:'p2',role:'poster',name:'Vikram Rao',company:'Shapoorji Pallonji',designation:'QS Lead',city:'Pune',exp:'9 yrs',skills:['Billing / QS','Estimation'],color:'#8B005B',verified:true,blocked:false,
+    {id:'p2',role:'poster',email:'vikram@workora.com',name:'Vikram Rao',company:'Shapoorji Pallonji',designation:'QS Lead',city:'Pune',exp:'9 yrs',skills:['Billing / QS','Estimation'],color:'#8B005B',verified:true,blocked:false,
      services:[{id:'sv4',name:'10-min Career Call',desc:'Billing & QS advice',price:249,icon:'📞',bg:'var(--amber-soft)',on:true},
                {id:'sv5',name:'Resume Review',desc:'QS-focused review',price:399,icon:'📄',bg:'#eaf0fb',on:true}],
      social:{linkedin:'in/vikram-rao',insta:'',yt:''}},
-    {id:'p3',role:'poster',name:'Neha Gupta',company:'Tata Projects',designation:'BIM Manager',city:'Hyderabad',exp:'7 yrs',skills:['BIM','Revit'],color:'#0FA968',verified:false,blocked:false,
+    {id:'p3',role:'poster',email:'neha@workora.com',name:'Neha Gupta',company:'Tata Projects',designation:'BIM Manager',city:'Hyderabad',exp:'7 yrs',skills:['BIM','Revit'],color:'#0FA968',verified:false,blocked:false,
      services:[{id:'sv6',name:'10-min Career Call',desc:'BIM/Revit career path',price:299,icon:'📞',bg:'var(--amber-soft)',on:true},
                {id:'sv7',name:'Skill Check / Mock',desc:'Revit hands-on test',price:599,icon:'🎯',bg:'var(--green-soft)',on:true}],
      social:{linkedin:'in/neha-gupta',insta:'',yt:''}},
-    {id:'p4',role:'poster',name:'Sanjay Mehta',company:'DLF',designation:'GM – Projects',city:'Gurugram',exp:'18 yrs',skills:['Project Mgmt','Contracts','Planning'],color:'#5b3da8',verified:true,blocked:false,
+    {id:'p4',role:'poster',email:'sanjay@workora.com',name:'Sanjay Mehta',company:'DLF',designation:'GM – Projects',city:'Gurugram',exp:'18 yrs',skills:['Project Mgmt','Contracts','Planning'],color:'#5b3da8',verified:true,blocked:false,
      services:[{id:'sv8',name:'10-min Career Call',desc:'Career roadmap & growth',price:399,icon:'📞',bg:'var(--amber-soft)',on:true},
                {id:'sv9',name:'Resume Review',desc:'Senior-level resume audit',price:599,icon:'📄',bg:'#eaf0fb',on:true},
                {id:'sv10',name:'Mock Interview',desc:'45-min PM interview prep',price:899,icon:'🎤',bg:'#fdeaf4',on:true,duration:45}],
      social:{linkedin:'in/sanjay-mehta'}},
-    {id:'p5',role:'poster',name:'Kavita Nair',company:'AECOM India',designation:'Structural Lead',city:'Bengaluru',exp:'14 yrs',skills:['Structural','Design','ETABS'],color:'#0c7a8a',verified:true,blocked:false,
+    {id:'p5',role:'poster',email:'kavita@workora.com',name:'Kavita Nair',company:'AECOM India',designation:'Structural Lead',city:'Bengaluru',exp:'14 yrs',skills:['Structural','Design','ETABS'],color:'#0c7a8a',verified:true,blocked:false,
      services:[{id:'sv11',name:'10-min Career Call',desc:'Structural design career',price:349,icon:'📞',bg:'var(--amber-soft)',on:true},
                {id:'sv12',name:'Skill Check / Mock',desc:'ETABS/STAAD evaluation',price:699,icon:'🎯',bg:'var(--green-soft)',on:true}],
      social:{linkedin:'in/kavita-nair'}},
-    {id:'p6',role:'poster',name:'Imran Khan',company:'Dilip Buildcon',designation:'Highway Project Manager',city:'Bhopal',exp:'11 yrs',skills:['Highways','Planning','Execution'],color:'#c0392b',verified:true,blocked:false,
+    {id:'p6',role:'poster',email:'imran@workora.com',name:'Imran Khan',company:'Dilip Buildcon',designation:'Highway Project Manager',city:'Bhopal',exp:'11 yrs',skills:['Highways','Planning','Execution'],color:'#c0392b',verified:true,blocked:false,
      services:[{id:'sv13',name:'10-min Career Call',desc:'Infra/highways guidance',price:299,icon:'📞',bg:'var(--amber-soft)',on:true},
                {id:'sv14',name:'Resume Review',desc:'Infra-focused review',price:449,icon:'📄',bg:'#eaf0fb',on:true}],
      social:{linkedin:'in/imran-khan'}},
   ];
   const seekers=[
-    {id:'s1',role:'seeker',name:'Rohan Mehta',city:'Pune',exp:'0–2 yrs',title:'Site Engineer',skills:['Site Execution','AutoCAD','Billing'],color:'#F0631F',verified:true,blocked:false,social:{linkedin:'in/rohan'}},
-    {id:'s2',role:'seeker',name:'Priya Kumar',city:'Mumbai',exp:'2–5 yrs',title:'Quantity Surveyor',skills:['Billing','BBS','BOQ'],color:'#5b3da8',verified:true,blocked:false,social:{}},
-    {id:'s3',role:'seeker',name:'Sahil Verma',city:'Delhi',exp:'Fresher',title:'BIM Trainee',skills:['Revit / BIM','AutoCAD'],color:'#0c7a8a',verified:false,blocked:false,social:{}},
+    {id:'s1',role:'seeker',email:'seeker@workora.com',name:'Rohan Mehta',city:'Pune',exp:'0–2 yrs',title:'Site Engineer',skills:['Site Execution','AutoCAD','Billing'],color:'#F0631F',verified:true,blocked:false,social:{linkedin:'in/rohan'}},
+    {id:'s2',role:'seeker',email:'priya@workora.com',name:'Priya Kumar',city:'Mumbai',exp:'2–5 yrs',title:'Quantity Surveyor',skills:['Billing','BBS','BOQ'],color:'#5b3da8',verified:true,blocked:false,social:{}},
+    {id:'s3',role:'seeker',email:'sahil@workora.com',name:'Sahil Verma',city:'Delhi',exp:'Fresher',title:'BIM Trainee',skills:['Revit / BIM','AutoCAD'],color:'#0c7a8a',verified:false,blocked:false,social:{}},
   ];
-  const admin=[{id:'admin',role:'admin',name:'Admin',color:'#c0392b'}];
+  const admin=[{id:'admin',role:'admin',email:'admin@workora.com',name:'Admin User',color:'#c0392b'}];
   const jobs=[
     {id:'j1',title:'Site Engineer',company:'L&T Construction',location:'Pune',exp:'2-4 yrs',salary:'₹5–7 LPA',link:'https://careers.lnt-construction.com/apply/se-2291',desc:'On-site execution & quality control for residential high-rise. RCC, formwork, supervision.',posterId:'p1',applicants:['s2'],created:Date.now()-86400000*2},
     {id:'j2',title:'Quantity Surveyor',company:'Shapoorji Pallonji',location:'Mumbai',exp:'3-6 yrs',salary:'₹6–9 LPA',link:'https://careers.shapoorji.com/qs-883',desc:'BBS, BOQ preparation, billing & contract management for infra projects.',posterId:'p2',applicants:[],created:Date.now()-86400000},
@@ -1220,13 +1265,53 @@ function buildSeed(posters,seekers,admin,jobs,reviews,bookings,payments){
     {id:uid(),from:'s2',text:'2.5 years, mostly billing aur QS side. Site execution thoda kam.',created:Date.now()-3600000*4,read:false}]}];
   return {users,jobs,reviews,bookings,payments,applications,notifs,payouts,disputes,announcements,settings,adminLog,threads,session:null};
 }
-function loadDB(){let l=null;try{const r=localStorage.getItem(KEY);if(r)l=JSON.parse(r)}catch(e){}db=l||seed();persist()}
+function loadDB(){let l=null;try{const r=localStorage.getItem(KEY);if(r)l=JSON.parse(r)}catch(e){}db=l||seed();if(!firebaseActive)persist()}
 function me(){return db.users.find(u=>u.id===db.session)}
 function user(id){return db.users.find(u=>u.id===id)}
 function posterRating(pid){const rs=db.reviews.filter(r=>r.posterId===pid);if(!rs.length)return{avg:0,n:0};return{avg:(rs.reduce((a,r)=>a+r.rating,0)/rs.length),n:rs.length}}
 function login(id){db.session=id;state.resumeDraft=null;state.actTab='saved';state.svcTab='services';state.editJobId=null;state.adminSec='overview';state.learnCat='All';state.quiz=null;state.mfilter={q:'',skill:'',company:'',service:'',price:0,minR:0,sort:'rating'};state.filters={q:'',location:'',type:'',sort:'recent'};persist();route(roleHome())}
-function logout(){db.session=null;state.resumeDraft=null;persist();route('home')}
+function logout(){
+  if(firebaseActive){
+    auth.signOut().catch(err=>console.error("Signout error:", err));
+  }
+  db.session=null;
+  state.resumeDraft=null;
+  persist();
+  route('home');
+}
 function roleHome(){const u=me();return !u?'home':u.role==='seeker'?'seekerhome':u.role==='poster'?'dashboard':'admin'}
+
+/* ================= CLOUD SYNC ================= */
+function cloudSave(col, docId, data) {
+  if (firebaseActive) {
+    firestore.collection(col).doc(docId).set(JSON.parse(JSON.stringify(data)))
+      .catch(e => console.error(`Error saving to ${col}:`, e));
+  }
+}
+
+function syncCloudDB() {
+  if (!firebaseActive) return Promise.resolve();
+  
+  const cols = ['users', 'jobs', 'reviews', 'bookings', 'payments', 'applications', 'threads'];
+  const promises = cols.map(c => {
+    return firestore.collection(c).get().then(snapshot => {
+      const docs = [];
+      snapshot.forEach(doc => {
+        docs.push(doc.data());
+      });
+      if (docs.length > 0) {
+        db[c] = docs;
+      }
+    });
+  });
+  
+  return Promise.all(promises).then(() => {
+    persist();
+    console.log("Cloud DB synchronized successfully.");
+  }).catch(err => {
+    console.error("Cloud DB sync failed:", err);
+  });
+}
 
 /* ================= NAV ================= */
 function renderNav(){
@@ -1251,7 +1336,17 @@ const state={view:'home',param:null,signup:{step:0,role:null,skills:[],services:
   adminSec:'overview',userTab:'seeker',userFilter:'all',finTab:'transactions',jobFilter:'all',
   learnCat:'All',quiz:null,adminQ:'',
   mfilter:{q:'',skill:'',company:'',service:'',price:0,minR:0,sort:'rating'}};
-function route(view,param){state.view=view;state.param=param||null;window.scrollTo(0,0);renderNav();render()}
+function route(view,param){
+  state.view=view;
+  state.param=param||null;
+  window.scrollTo(0,0);
+  renderNav();
+  if (firebaseActive) {
+    syncCloudDB().then(() => render());
+  } else {
+    render();
+  }
+}
 function render(){
   const v=state.view;const u=me();
   // guard
@@ -1391,24 +1486,237 @@ function expertCard(p){
 }
 
 /* ================= AUTH ================= */
+let currentOTP = null;
+let currentOTPEmail = null;
+
+function sendEmailOTP(email) {
+  email = (email || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    toast('Please enter a valid email address');
+    return;
+  }
+  
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  currentOTP = code;
+  currentOTPEmail = email;
+  
+  if (typeof emailjs !== 'undefined' && EMAILJS_CONFIG.publicKey && !EMAILJS_CONFIG.publicKey.startsWith("YOUR_")) {
+    toast('Sending OTP via email...');
+    emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, {
+      to_email: email,
+      otp_code: code,
+      app_name: "WORKORA"
+    }).then(() => {
+      toast('Verification OTP sent to your email!');
+      showOTPInput(email);
+    }).catch(err => {
+      console.error('EmailJS sending failed:', err);
+      toast('Email service error. Simulating OTP code.');
+      simulateOTP(email, code);
+    });
+  } else {
+    simulateOTP(email, code);
+  }
+}
+
+function simulateOTP(email, code) {
+  document.getElementById('gentitle').textContent = '✉️ Simulated Email OTP';
+  document.getElementById('genbody').innerHTML = `
+    <div style="text-align:center;padding:10px">
+      <div style="font-size:40px;margin-bottom:12px">📩</div>
+      <p style="font-size:14px;color:var(--neutral-700)">Simulated verification code sent to:<br><b>${email}</b></p>
+      <div style="background:var(--surface-bg);border:1px dashed var(--secondary-600);border-radius:12px;padding:12px;margin:16px 0;font-size:24px;font-weight:800;letter-spacing:4px;color:var(--primary-600)">${code}</div>
+      <p style="font-size:12px;color:var(--neutral-500)">Use this OTP code to complete sign-in.</p>
+      <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="closeM('genOverlay')">Okay, copy OTP</button>
+    </div>
+  `;
+  openM('genOverlay');
+  showOTPInput(email);
+}
+
+function showOTPInput(email) {
+  state.otpSent = true;
+  state.otpEmail = email;
+  render();
+}
+
+function verifyEmailOTP(codeEntered) {
+  if (codeEntered !== currentOTP) {
+    toast('Incorrect verification code. Please try again.');
+    return;
+  }
+  
+  const email = currentOTPEmail;
+  toast('Email successfully verified!');
+  state.otpSent = false;
+  state.otpEmail = '';
+  
+  if (firebaseActive) {
+    // Authenticate in Firebase using derived shared secret password
+    auth.signInWithEmailAndPassword(email, "workoraSecretPassword123!")
+      .then(userCredential => {
+        handleAuthSuccess(userCredential.user, email);
+      })
+      .catch(error => {
+        if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+          // Attempt registration if not found
+          auth.createUserWithEmailAndPassword(email, "workoraSecretPassword123!")
+            .then(userCredential => {
+              handleAuthSuccess(userCredential.user, email, true);
+            })
+            .catch(regErr => {
+              toast('Sign up failed: ' + regErr.message);
+            });
+        } else {
+          toast('Auth error: ' + error.message);
+        }
+      });
+  } else {
+    handleLocalAuthSuccess(email);
+  }
+}
+
+function loginWithGoogle() {
+  if (!firebaseActive) {
+    toast('Google Login requires active Firebase configuration keys.');
+    return;
+  }
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider)
+    .then(result => {
+      const email = result.user.email;
+      toast('Google Authentication successful!');
+      handleAuthSuccess(result.user, email);
+    })
+    .catch(err => {
+      toast('Google Sign-in failed: ' + err.message);
+    });
+}
+
+function loginDemoUser(role) {
+  const mapping = {
+    seeker: 'seeker@workora.com',
+    poster: 'poster@workora.com',
+    admin: 'admin@workora.com'
+  };
+  const email = mapping[role];
+  toast(`Accessing demo ${role} account...`);
+  
+  if (firebaseActive) {
+    auth.signInWithEmailAndPassword(email, "workoraSecretPassword123!")
+      .then(userCredential => {
+        handleAuthSuccess(userCredential.user, email);
+      })
+      .catch(error => {
+        // Automatically create and seed the demo account in Firebase Auth + Firestore
+        auth.createUserWithEmailAndPassword(email, "workoraSecretPassword123!")
+          .then(userCredential => {
+            const uid = userCredential.user.uid;
+            let profile;
+            if (role === 'seeker') {
+              profile = { id: uid, role: 'seeker', email, name: 'Demo Seeker', city: 'Pune', exp: '0–2 yrs', title: 'Site Engineer', skills: ['Site Execution','AutoCAD','Billing'], color: '#F0631F', verified: true, blocked: false, social: {} };
+            } else if (role === 'poster') {
+              profile = { id: uid, role: 'poster', email, name: 'Anjali Sharma (Demo)', company: 'L&T Construction', designation: 'Sr. Project Manager', city: 'Mumbai', exp: '12 yrs', skills: ['Project Mgmt','Site Execution'], color: '#2d4f86', verified: true, blocked: false, social: {}, services: [
+                {id:'sv1',name:'10-min Career Call',desc:'Quick guidance & referrals',price:299,icon:'📞',bg:'var(--amber-soft)',on:true},
+                {id:'sv2',name:'Resume Review',desc:'Detailed feedback report',price:499,icon:'📄',bg:'#eaf0fb',on:true}
+              ] };
+            } else {
+              profile = { id: uid, role: 'admin', email, name: 'Admin User', color: '#c0392b' };
+            }
+            firestore.collection('users').doc(uid).set(profile).then(() => {
+              handleAuthSuccess(userCredential.user, email);
+            });
+          })
+          .catch(err => {
+            toast('Failed to initialize demo account: ' + err.message);
+          });
+      });
+  } else {
+    const idMapping = { seeker: 's1', poster: 'p1', admin: 'admin' };
+    login(idMapping[role]);
+  }
+}
+
+function handleAuthSuccess(firebaseUser, email) {
+  const uid = firebaseUser.uid;
+  firestore.collection('users').doc(uid).get().then(doc => {
+    if (!doc.exists) {
+      // Profile does not exist, redirect to Signup profile creation wizard
+      db.session = uid;
+      state.signup = { step: 0, role: null, skills: [], services: [], name: email.split('@')[0], email: email };
+      persist();
+      route('signup');
+    } else {
+      // Profile exists, sync profile to local db state and login
+      const u = doc.data();
+      db.session = uid;
+      const idx = db.users.findIndex(x => x.id === uid);
+      if (idx > -1) db.users[idx] = u;
+      else db.users.push(u);
+      persist();
+      route(roleHome());
+    }
+  });
+}
+
+function handleLocalAuthSuccess(email) {
+  let u = db.users.find(x => x.email === email);
+  if (!u) {
+    // Register new user locally and redirect to wizard
+    const newId = uid();
+    state.signup = { step: 0, role: null, skills: [], services: [], name: email.split('@')[0], email: email };
+    db.session = newId;
+    persist();
+    route('signup');
+  } else {
+    db.session = u.id;
+    persist();
+    route(roleHome());
+  }
+}
+
 function vLogin(){
+  const isOTPSent = state.otpSent || false;
+  const emailVal = state.otpEmail || '';
+  
+  if (isOTPSent) {
+    return `<div class="authpage"><div class="authcard">
+      <h2>Verify your Email ✉️</h2>
+      <p class="sub">Enter the 6-digit OTP code sent to <b>${emailVal}</b></p>
+      <div class="field">
+        <label>Verification Code (OTP)</label>
+        <input id="otp-code" type="text" maxlength="6" style="text-align:center;letter-spacing:6px;font-size:20px;font-weight:700" placeholder="000000">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="verifyEmailOTP(document.getElementById('otp-code').value.trim())">Verify & Login</button>
+      <p class="skiplink" onclick="state.otpSent=false;render()">← Use different email</p>
+    </div></div>`;
+  }
+
   return `<div class="authpage"><div class="authcard">
-    <h2>Welcome back 👋</h2><p class="sub">Login to continue to WORKORA</p>
-    <div class="field"><label>Mobile number</label><input placeholder="+91 ..........." inputmode="numeric"></div>
-    <button class="btn btn-primary btn-block" onclick="toast('OTP sent (demo)')">Continue with OTP</button>
+    <h2>Welcome back 👋</h2>
+    <p class="sub">Log in or Sign up to continue to WORKORA</p>
+    <div class="field">
+      <label>Email Address</label>
+      <input id="auth-email" type="email" placeholder="name@email.com" value="${emailVal}">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="sendEmailOTP(document.getElementById('auth-email').value)">Continue with Email OTP</button>
     <div class="ordiv">or</div>
     <div class="sociallogin">
-      <div class="slbtn" onclick="route('signup')"><span class="gi" style="background:#fff;color:#4285F4;border:1px solid #ddd">G</span> Continue with Google</div>
-      <div class="slbtn" onclick="route('signup')"><span class="gi" style="background:#0A66C2">in</span> Continue with LinkedIn</div>
+      <button class="slbtn btn-block" onclick="loginWithGoogle()" style="border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:12px;font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;width:100%">
+        <span class="gi" style="background:#fff;color:#4285F4;border:1px solid #ddd;padding:0 5px;border-radius:3px">G</span> Continue with Google
+      </button>
     </div>
-    <div class="demoquick"><p>⚡ DEMO — quick login to explore:</p><div class="dq">
-      <button class="btn btn-ghost btn-sm" onclick="login('s1')">👷 As Job Seeker</button>
-      <button class="btn btn-ghost btn-sm" onclick="login('p1')">🏗️ As Job Poster</button>
-      <button class="btn btn-ghost btn-sm" onclick="login('admin')">🛡️ As Admin</button>
-    </div></div>
-    <p class="skiplink" onclick="route('signup')">New here? Create an account</p>
+    <div class="demoquick">
+      <p>⚡ QUICK LOGINS (Pre-created Accounts):</p>
+      <div class="dq">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="loginDemoUser('seeker')">👷 Job Seeker</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="loginDemoUser('poster')">🏗️ Job Poster</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="loginDemoUser('admin')">🛡️ Admin</button>
+      </div>
+    </div>
   </div></div>`;
 }
+
 function vSignup(){
   const s=state.signup;const pct=[20,40,60,80,100][s.step]||20;
   let inner='';
@@ -1421,7 +1729,7 @@ function vSignup(){
     inner=`<h2>Tell us about you</h2><p class="sub">Basic details for your profile.</p>
       <div class="field"><label>Full name</label><input id="su-name" value="${s.name||''}" placeholder="e.g. Rohan Mehta"></div>
       <div class="twocol"><div class="field"><label>City</label><input id="su-city" placeholder="Pune"></div><div class="field"><label>Mobile</label><input placeholder="+91 ........."></div></div>
-      <div class="field"><label>Email</label><input placeholder="you@email.com"></div>
+      <div class="field"><label>Email</label><input value="${s.email||''}" readonly style="background:#eaf0fb;cursor:not-allowed"></div>
       <button class="btn btn-primary btn-block" onclick="suNext()">Continue</button>`;
   }else if(s.step===2){
     if(s.role==='seeker'){
@@ -1466,17 +1774,50 @@ function suNext(){const s=state.signup;
   s.step++;render();}
 function suBack(){state.signup.step--;render()}
 function finishSignup(){
-  const s=state.signup;const id=uid();const color=COLORS[Math.floor(Math.random()*COLORS.length)];
+  const s=state.signup;
+  const id=db.session || uid();
+  const color=COLORS[Math.floor(Math.random()*COLORS.length)];
   const name=s.name||(s.role==='seeker'?'New Engineer':'New Mentor');
+  const email=s.email || '';
+  
+  let profile;
   if(s.role==='seeker'){
-    db.users.push({id,role:'seeker',name,city:'',exp:'0–2 yrs',title:document.getElementById('su-title')?.value||'Civil Engineer',skills:s.skills,color,verified:false,blocked:false,social:{}});
+    profile = {
+      id, role:'seeker', email, name, city:document.getElementById('su-city')?.value||'',
+      exp:'0–2 yrs', title:document.getElementById('su-title')?.value||'Civil Engineer',
+      skills:s.skills, color, verified:false, blocked:false, social:{}
+    };
   }else{
     const svc=[];const map={'📞 10-min Call':{n:'10-min Career Call',d:'Quick guidance',p:299,i:'📞',bg:'var(--amber-soft)'},'📄 Resume Review':{n:'Resume Review',d:'Detailed feedback',p:499,i:'📄',bg:'#eaf0fb'},'🎯 Skill Check':{n:'Skill Check / Mock',d:'Technical evaluation',p:699,i:'🎯',bg:'var(--green-soft)'}};
     (s.services.length?s.services:['📞 10-min Call']).forEach(x=>{const m=map[x];svc.push({id:uid(),name:m.n,desc:m.d,price:m.p,icon:m.i,bg:m.bg,on:true})});
-    db.users.push({id,role:'poster',name,company:document.getElementById('su-company')?.value||'',designation:document.getElementById('su-desig')?.value||'Civil Engineer',city:'',exp:'5–10 yrs',skills:s.skills,color,verified:false,blocked:false,services:svc,social:{}});
+    profile = {
+      id, role:'poster', email, name, company:document.getElementById('su-company')?.value||'',
+      designation:document.getElementById('su-desig')?.value||'Civil Engineer', city:document.getElementById('su-city')?.value||'',
+      exp:'5–10 yrs', skills:s.skills, color, verified:false, blocked:false, services:svc, social:{}
+    };
   }
-  state.signup={step:0,role:null,skills:[],services:[],name:''};
-  login(id);toast('Welcome to WORKORA 🎉');
+
+  const idx=db.users.findIndex(x=>x.id===id);
+  if(idx>-1) db.users[idx]=profile;
+  else db.users.push(profile);
+  db.session=id;
+  persist();
+
+  if(firebaseActive){
+    firestore.collection('users').doc(id).set(profile).then(()=>{
+      state.signup={step:0,role:null,skills:[],services:[],name:'',email:''};
+      login(id);
+      toast('Welcome to WORKORA 🎉');
+    }).catch(err=>{
+      console.error('Firestore save failed:', err);
+      state.signup={step:0,role:null,skills:[],services:[],name:'',email:''};
+      login(id);
+    });
+  } else {
+    state.signup={step:0,role:null,skills:[],services:[],name:'',email:''};
+    login(id);
+    toast('Welcome to WORKORA 🎉');
+  }
 }
 
 /* ================= SEEKER ================= */
@@ -2943,7 +3284,38 @@ let tt;function toast(m){const t=document.getElementById('toast');t.textContent=
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('show')}));
 
 /* ================= BOOT ================= */
-loadDB();route('home');
+if (firebaseActive) {
+  auth.onAuthStateChanged(firebaseUser => {
+    if (firebaseUser) {
+      db.session = firebaseUser.uid;
+      syncCloudDB().then(() => {
+        let u = db.users.find(x => x.id === firebaseUser.uid);
+        if (u) {
+          route(roleHome());
+        } else {
+          firestore.collection('users').doc(firebaseUser.uid).get().then(doc => {
+            if (doc.exists) {
+              const profile = doc.data();
+              db.users.push(profile);
+              persist();
+              route(roleHome());
+            } else {
+              state.signup = { step: 0, role: null, skills: [], services: [], name: firebaseUser.email.split('@')[0], email: firebaseUser.email };
+              route('signup');
+            }
+          });
+        }
+      });
+    } else {
+      db.session = null;
+      loadDB();
+      route('home');
+    }
+  });
+} else {
+  loadDB();
+  route('home');
+}
 </script>
 </body>
 </html>
