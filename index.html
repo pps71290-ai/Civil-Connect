@@ -1739,14 +1739,19 @@ function sendSignupOTP(email) {
     toast('Sending OTP via email...');
     emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, {
       to_email: email,
+      email: email,
+      user_email: email,
+      recipient: email,
+      to_name: email.split('@')[0],
       otp_code: code,
+      otp: code,
       app_name: "WORKORA"
     }).then(() => {
       toast('Verification OTP sent to your email!');
       showSignupOTPInput(email);
     }).catch(err => {
       console.error('EmailJS sending failed:', err);
-      toast('Email service error. Simulating OTP code.');
+      toast('EmailJS Error: ' + (err.text || err.message || JSON.stringify(err)) + '. Showing simulation.');
       simulateSignupOTP(email, code);
     });
   } else {
