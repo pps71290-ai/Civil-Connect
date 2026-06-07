@@ -1227,6 +1227,9 @@ function seed(){
 }
 function buildSeed(posters,seekers,admin,jobs,reviews,bookings,payments){
   const users=[...posters,...seekers,...admin];
+  users.forEach(u => {
+    if (!u.pin) u.pin = '1234';
+  });
   users.filter(u=>u.role==='seeker').forEach(u=>{u.saved=[];u.alerts=[];u.resume=null;u.streak=0;u.lastVisit=null;u.learn={read:[],quiz:{},bookmarks:[],streak:0,last:null,tipDate:null};u.following=[]});
   const s1u=users.find(u=>u.id==='s1');
   if(s1u){s1u.streak=4;s1u.lastVisit=new Date(Date.now()-86400000).toISOString().slice(0,10);s1u.following=['p1','p4'];
@@ -1330,7 +1333,7 @@ function renderNav(){
 }
 
 /* ================= ROUTER ================= */
-const state={view:'home',param:null,signup:{step:0,role:null,skills:[],services:[],name:''},book:null,rating:0,
+const state={view:'home',param:null,signup:{step:0,role:null,skills:[],services:[],name:'',email:'',pin:'',city:'',mobile:'',googleUser:false},book:null,rating:0,
   filters:{q:'',location:'',type:'',sort:'recent'},actTab:'saved',resched:null,
   editJobId:null,svcTab:'services',appJob:null,editSvc:null,
   adminSec:'overview',userTab:'seeker',userFilter:'all',finTab:'transactions',jobFilter:'all',
@@ -1489,151 +1492,174 @@ function expertCard(p){
 let currentOTP = null;
 let currentOTPEmail = null;
 
-function sendEmailOTP(email) {
+function loginWithPin(email, pin) {
   email = (email || '').trim().toLowerCase();
+  pin = (pin || '').trim();
+  
   if (!email || !email.includes('@')) {
     toast('Please enter a valid email address');
     return;
   }
-  
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  currentOTP = code;
-  currentOTPEmail = email;
-  
-  if (typeof emailjs !== 'undefined' && EMAILJS_CONFIG.publicKey && !EMAILJS_CONFIG.publicKey.startsWith("YOUR_")) {
-    toast('Sending OTP via email...');
-    emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, {
-      to_email: email,
-      otp_code: code,
-      app_name: "WORKORA"
-    }).then(() => {
-      toast('Verification OTP sent to your email!');
-      showOTPInput(email);
-    }).catch(err => {
-      console.error('EmailJS sending failed:', err);
-      toast('Email service error. Simulating OTP code.');
-      simulateOTP(email, code);
-    });
-  } else {
-    simulateOTP(email, code);
-  }
-}
-
-function simulateOTP(email, code) {
-  document.getElementById('gentitle').textContent = '✉️ Simulated Email OTP';
-  document.getElementById('genbody').innerHTML = `
-    <div style="text-align:center;padding:10px">
-      <div style="font-size:40px;margin-bottom:12px">📩</div>
-      <p style="font-size:14px;color:var(--neutral-700)">Simulated verification code sent to:<br><b>${email}</b></p>
-      <div style="background:var(--surface-bg);border:1px dashed var(--secondary-600);border-radius:12px;padding:12px;margin:16px 0;font-size:24px;font-weight:800;letter-spacing:4px;color:var(--primary-600)">${code}</div>
-      <p style="font-size:12px;color:var(--neutral-500)">Use this OTP code to complete sign-in.</p>
-      <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="closeM('genOverlay')">Okay, copy OTP</button>
-    </div>
-  `;
-  openM('genOverlay');
-  showOTPInput(email);
-}
-
-function showOTPInput(email) {
-  state.otpSent = true;
-  state.otpEmail = email;
-  render();
-}
-
-function verifyEmailOTP(codeEntered) {
-  if (codeEntered !== currentOTP) {
-    toast('Incorrect verification code. Please try again.');
+  if (!pin || pin.length !== 4 || isNaN(pin)) {
+    toast('Please enter a 4-digit PIN');
     return;
   }
-  
-  const email = currentOTPEmail;
-  toast('Email successfully verified!');
-  state.otpSent = false;
-  state.otpEmail = '';
-  
+
+  toast('Logging in...');
   if (firebaseActive) {
-    // Authenticate in Firebase using derived shared secret password
-    auth.signInWithEmailAndPassword(email, "workoraSecretPassword123!")
+    const fbPassword = pin + "_workoraSecretPassword123!";
+    auth.signInWithEmailAndPassword(email, fbPassword)
       .then(userCredential => {
         handleAuthSuccess(userCredential.user, email);
       })
       .catch(error => {
-        if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-          // Attempt registration if not found
-          auth.createUserWithEmailAndPassword(email, "workoraSecretPassword123!")
-            .then(userCredential => {
-              handleAuthSuccess(userCredential.user, email, true);
-            })
-            .catch(regErr => {
-              toast('Sign up failed: ' + regErr.message);
-            });
+        if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+          // Check if this is one of our seed accounts and we need to create/update it in firebase
+          const seeded = db.users.find(x => x.email === email);
+          if (seeded && (seeded.pin === pin || (!seeded.pin && pin === '1234'))) {
+            // Seed user exists locally with this pin, but maybe not in Firebase. Let's create it in Firebase!
+            auth.createUserWithEmailAndPassword(email, fbPassword)
+              .then(userCredential => {
+                // Save seeded user details to Firestore
+                firestore.collection('users').doc(userCredential.user.uid).set(seeded)
+                  .then(() => {
+                    handleAuthSuccess(userCredential.user, email);
+                  });
+              })
+              .catch(regErr => {
+                toast('Invalid credentials or authentication error');
+              });
+          } else {
+            toast('Invalid Email or PIN');
+          }
         } else {
           toast('Auth error: ' + error.message);
         }
       });
   } else {
-    handleLocalAuthSuccess(email);
+    // Local DB authentication
+    const u = db.users.find(x => x.email === email);
+    if (u) {
+      const uPin = u.pin || '1234';
+      if (uPin === pin) {
+        db.session = u.id;
+        persist();
+        toast('Logged in successfully! 🎉');
+        route(roleHome());
+      } else {
+        toast('Incorrect PIN. Please try again.');
+      }
+    } else {
+      toast('Email not registered. Please sign up first.');
+    }
   }
 }
 
 function loginWithGoogle() {
-  if (!firebaseActive) {
-    toast('Google Login requires active Firebase configuration keys.');
-    return;
-  }
-  const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider)
-    .then(result => {
-      const email = result.user.email;
-      toast('Google Authentication successful!');
-      handleAuthSuccess(result.user, email);
-    })
-    .catch(err => {
-      toast('Google Sign-in failed: ' + err.message);
-    });
-}
-
-function loginDemoUser(role) {
-  const mapping = {
-    seeker: 'seeker@workora.com',
-    poster: 'poster@workora.com',
-    admin: 'admin@workora.com'
-  };
-  const email = mapping[role];
-  toast(`Accessing demo ${role} account...`);
-  
   if (firebaseActive) {
-    auth.signInWithEmailAndPassword(email, "workoraSecretPassword123!")
-      .then(userCredential => {
-        handleAuthSuccess(userCredential.user, email);
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider)
+      .then(result => {
+        const email = result.user.email;
+        toast('Google Authentication successful!');
+        handleAuthSuccess(result.user, email);
       })
-      .catch(error => {
-        // Automatically create and seed the demo account in Firebase Auth + Firestore
-        auth.createUserWithEmailAndPassword(email, "workoraSecretPassword123!")
-          .then(userCredential => {
-            const uid = userCredential.user.uid;
-            let profile;
-            if (role === 'seeker') {
-              profile = { id: uid, role: 'seeker', email, name: 'Demo Seeker', city: 'Pune', exp: '0–2 yrs', title: 'Site Engineer', skills: ['Site Execution','AutoCAD','Billing'], color: '#F0631F', verified: true, blocked: false, social: {} };
-            } else if (role === 'poster') {
-              profile = { id: uid, role: 'poster', email, name: 'Anjali Sharma (Demo)', company: 'L&T Construction', designation: 'Sr. Project Manager', city: 'Mumbai', exp: '12 yrs', skills: ['Project Mgmt','Site Execution'], color: '#2d4f86', verified: true, blocked: false, social: {}, services: [
-                {id:'sv1',name:'10-min Career Call',desc:'Quick guidance & referrals',price:299,icon:'📞',bg:'var(--amber-soft)',on:true},
-                {id:'sv2',name:'Resume Review',desc:'Detailed feedback report',price:499,icon:'📄',bg:'#eaf0fb',on:true}
-              ] };
-            } else {
-              profile = { id: uid, role: 'admin', email, name: 'Admin User', color: '#c0392b' };
-            }
-            firestore.collection('users').doc(uid).set(profile).then(() => {
-              handleAuthSuccess(userCredential.user, email);
-            });
-          })
-          .catch(err => {
-            toast('Failed to initialize demo account: ' + err.message);
-          });
+      .catch(err => {
+        toast('Google Sign-in failed: ' + err.message);
       });
   } else {
-    const idMapping = { seeker: 's1', poster: 'p1', admin: 'admin' };
-    login(idMapping[role]);
+    simulateGoogleAuth();
+  }
+}
+
+function simulateGoogleAuth() {
+  document.getElementById('gentitle').textContent = '🌐 Simulated Google Login';
+  document.getElementById('genbody').innerHTML = `
+    <div style="text-align:center;padding:10px">
+      <p style="font-size:14px;color:var(--neutral-700);margin-bottom:15px">Select a mock Google account to log in instantly:</p>
+      <button class="btn btn-outline btn-block" style="margin-bottom:8px" onclick="closeM('genOverlay'); handleLocalAuthSuccess('seeker@workora.com')">seeker@workora.com (Job Seeker)</button>
+      <button class="btn btn-outline btn-block" style="margin-bottom:8px" onclick="closeM('genOverlay'); handleLocalAuthSuccess('poster@workora.com')">poster@workora.com (Job Poster)</button>
+      <button class="btn btn-outline btn-block" onclick="closeM('genOverlay'); handleLocalAuthSuccess('newgoogle@example.com')">newgoogle@example.com (New User)</button>
+    </div>
+  `;
+  openM('genOverlay');
+}
+
+function signupWithGoogle() {
+  if (firebaseActive) {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider)
+      .then(result => {
+        const email = result.user.email;
+        const name = result.user.displayName || email.split('@')[0];
+        toast('Google Authentication successful!');
+        
+        state.signup.email = email;
+        state.signup.name = name;
+        state.signup.googleUser = true;
+        db.session = result.user.uid;
+        persist();
+        
+        firestore.collection('users').doc(result.user.uid).get().then(doc => {
+          if (doc.exists) {
+            const u = doc.data();
+            db.session = result.user.uid;
+            const idx = db.users.findIndex(x => x.id === result.user.uid);
+            if (idx > -1) db.users[idx] = u;
+            else db.users.push(u);
+            persist();
+            toast('Account already exists. Logged in! 🎉');
+            route(roleHome());
+          } else {
+            state.signup.step = 2;
+            render();
+          }
+        });
+      })
+      .catch(err => {
+        toast('Google Sign-up failed: ' + err.message);
+      });
+  } else {
+    simulateGoogleSignup();
+  }
+}
+
+function simulateGoogleSignup() {
+  document.getElementById('gentitle').textContent = '🌐 Simulated Google Sign-up';
+  document.getElementById('genbody').innerHTML = `
+    <div style="text-align:center;padding:10px">
+      <p style="font-size:14px;color:var(--neutral-700);margin-bottom:15px">Choose email for mock Google Sign-up:</p>
+      <input id="mock-google-email" type="email" class="input" style="width:100%;padding:12px;border:1.5px solid var(--line);border-radius:12px;margin-bottom:12px;font-family:inherit" placeholder="yourname@gmail.com" value="googleuser@example.com">
+      <button class="btn btn-primary btn-block" onclick="completeSimulatedGoogleSignup(document.getElementById('mock-google-email').value)">Sign up with Google</button>
+    </div>
+  `;
+  openM('genOverlay');
+}
+
+function completeSimulatedGoogleSignup(email) {
+  email = (email || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    toast('Invalid email');
+    return;
+  }
+  closeM('genOverlay');
+  toast('Simulated Google Authentication successful!');
+  
+  const existingUser = db.users.find(u => u.email === email);
+  if (existingUser) {
+    db.session = existingUser.id;
+    persist();
+    toast('Account already exists. Logged in! 🎉');
+    route(roleHome());
+  } else {
+    state.signup.email = email;
+    state.signup.name = email.split('@')[0];
+    state.signup.googleUser = true;
+    const newId = uid();
+    db.session = newId;
+    persist();
+    state.signup.step = 2;
+    render();
   }
 }
 
@@ -1641,13 +1667,11 @@ function handleAuthSuccess(firebaseUser, email) {
   const uid = firebaseUser.uid;
   firestore.collection('users').doc(uid).get().then(doc => {
     if (!doc.exists) {
-      // Profile does not exist, redirect to Signup profile creation wizard
       db.session = uid;
-      state.signup = { step: 0, role: null, skills: [], services: [], name: email.split('@')[0], email: email };
+      state.signup = { step: 0, role: null, skills: [], services: [], name: email.split('@')[0], email: email, pin: '', city: '', mobile: '', googleUser: false };
       persist();
       route('signup');
     } else {
-      // Profile exists, sync profile to local db state and login
       const u = doc.data();
       db.session = uid;
       const idx = db.users.findIndex(x => x.id === uid);
@@ -1662,9 +1686,8 @@ function handleAuthSuccess(firebaseUser, email) {
 function handleLocalAuthSuccess(email) {
   let u = db.users.find(x => x.email === email);
   if (!u) {
-    // Register new user locally and redirect to wizard
     const newId = uid();
-    state.signup = { step: 0, role: null, skills: [], services: [], name: email.split('@')[0], email: email };
+    state.signup = { step: 0, role: null, skills: [], services: [], name: email.split('@')[0], email: email, pin: '', city: '', mobile: '', googleUser: false };
     db.session = newId;
     persist();
     route('signup');
@@ -1675,23 +1698,116 @@ function handleLocalAuthSuccess(email) {
   }
 }
 
-function vLogin(){
-  const isOTPSent = state.otpSent || false;
-  const emailVal = state.otpEmail || '';
+function validateStep1AndProceed() {
+  const name = (document.getElementById('su-name')?.value || '').trim();
+  const city = (document.getElementById('su-city')?.value || '').trim();
+  const mobile = (document.getElementById('su-mobile')?.value || '').trim();
+  const email = (document.getElementById('su-email')?.value || '').trim().toLowerCase();
+  const pin = (document.getElementById('su-pin')?.value || '').trim();
   
-  if (isOTPSent) {
-    return `<div class="authpage"><div class="authcard">
-      <h2>Verify your Email ✉️</h2>
-      <p class="sub">Enter the 6-digit OTP code sent to <b>${emailVal}</b></p>
-      <div class="field">
-        <label>Verification Code (OTP)</label>
-        <input id="otp-code" type="text" maxlength="6" style="text-align:center;letter-spacing:6px;font-size:20px;font-weight:700" placeholder="000000">
-      </div>
-      <button class="btn btn-primary btn-block" onclick="verifyEmailOTP(document.getElementById('otp-code').value.trim())">Verify & Login</button>
-      <p class="skiplink" onclick="state.otpSent=false;render()">← Use different email</p>
-    </div></div>`;
+  if (!name) { toast('Please enter your name'); return; }
+  if (!city) { toast('Please enter your city'); return; }
+  if (!mobile) { toast('Please enter your mobile number'); return; }
+  if (!email || !email.includes('@')) { toast('Please enter a valid email address'); return; }
+  
+  const emailExists = db.users.some(u => u.email === email);
+  if (emailExists) {
+    toast('This email is already registered. Please log in.');
+    return;
   }
+  
+  if (!pin || pin.length !== 4 || isNaN(pin)) {
+    toast('Please set a 4-digit numeric login PIN');
+    return;
+  }
+  
+  state.signup.name = name;
+  state.signup.city = city;
+  state.signup.mobile = mobile;
+  state.signup.email = email;
+  state.signup.pin = pin;
+  
+  sendSignupOTP(email);
+}
 
+function sendSignupOTP(email) {
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  currentOTP = code;
+  currentOTPEmail = email;
+  
+  if (typeof emailjs !== 'undefined' && EMAILJS_CONFIG.publicKey && !EMAILJS_CONFIG.publicKey.startsWith("YOUR_")) {
+    toast('Sending OTP via email...');
+    emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, {
+      to_email: email,
+      otp_code: code,
+      app_name: "WORKORA"
+    }).then(() => {
+      toast('Verification OTP sent to your email!');
+      showSignupOTPInput(email);
+    }).catch(err => {
+      console.error('EmailJS sending failed:', err);
+      toast('Email service error. Simulating OTP code.');
+      simulateSignupOTP(email, code);
+    });
+  } else {
+    simulateSignupOTP(email, code);
+  }
+}
+
+function simulateSignupOTP(email, code) {
+  document.getElementById('gentitle').textContent = '✉️ Simulated Email OTP';
+  document.getElementById('genbody').innerHTML = `
+    <div style="text-align:center;padding:10px">
+      <div style="font-size:40px;margin-bottom:12px">📩</div>
+      <p style="font-size:14px;color:var(--neutral-700)">Simulated verification code sent to:<br><b>${email}</b></p>
+      <div style="background:var(--surface-bg);border:1px dashed var(--secondary-600);border-radius:12px;padding:12px;margin:16px 0;font-size:24px;font-weight:800;letter-spacing:4px;color:var(--primary-600)">${code}</div>
+      <p style="font-size:12px;color:var(--neutral-500)">Use this OTP code to verify your email.</p>
+      <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="closeM('genOverlay')">Okay, copy OTP</button>
+    </div>
+  `;
+  openM('genOverlay');
+  showSignupOTPInput(email);
+}
+
+function showSignupOTPInput(email) {
+  state.signupOtpSent = true;
+  render();
+}
+
+function verifySignupOTP(codeEntered) {
+  if (codeEntered !== currentOTP) {
+    toast('Incorrect verification code. Please try again.');
+    return;
+  }
+  toast('Email successfully verified!');
+  state.signupOtpSent = false;
+  
+  if (firebaseActive) {
+    const email = state.signup.email;
+    const pin = state.signup.pin;
+    const fbPassword = pin + "_workoraSecretPassword123!";
+    
+    auth.createUserWithEmailAndPassword(email, fbPassword)
+      .then(userCredential => {
+        db.session = userCredential.user.uid;
+        persist();
+        state.signup.step = 2;
+        render();
+      })
+      .catch(regErr => {
+        toast('Sign up failed: ' + regErr.message);
+      });
+  } else {
+    const newId = uid();
+    db.session = newId;
+    persist();
+    state.signup.step = 2;
+    render();
+  }
+}
+
+function vLogin(){
+  const emailVal = state.otpEmail || '';
   return `<div class="authpage"><div class="authcard">
     <h2>Welcome back 👋</h2>
     <p class="sub">Log in or Sign up to continue to WORKORA</p>
@@ -1699,38 +1815,61 @@ function vLogin(){
       <label>Email Address</label>
       <input id="auth-email" type="email" placeholder="name@email.com" value="${emailVal}">
     </div>
-    <button class="btn btn-primary btn-block" onclick="sendEmailOTP(document.getElementById('auth-email').value)">Continue with Email OTP</button>
+    <div class="field">
+      <label>4-Digit Login PIN</label>
+      <input id="auth-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="font-size:18px;letter-spacing:8px">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="loginWithPin(document.getElementById('auth-email').value, document.getElementById('auth-pin').value)">Log In</button>
     <div class="ordiv">or</div>
     <div class="sociallogin">
       <button class="slbtn btn-block" onclick="loginWithGoogle()" style="border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:12px;font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;width:100%">
         <span class="gi" style="background:#fff;color:#4285F4;border:1px solid #ddd;padding:0 5px;border-radius:3px">G</span> Continue with Google
       </button>
     </div>
-    <div class="demoquick">
-      <p>⚡ QUICK LOGINS (Pre-created Accounts):</p>
-      <div class="dq">
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="loginDemoUser('seeker')">👷 Job Seeker</button>
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="loginDemoUser('poster')">🏗️ Job Poster</button>
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="loginDemoUser('admin')">🛡️ Admin</button>
-      </div>
-    </div>
+    <p class="sub" style="margin-top:20px;margin-bottom:0">Naye user hain? <span class="skiplink" onclick="route('signup')" style="font-weight:700;color:var(--secondary-600);cursor:pointer">Sign Up karein</span></p>
   </div></div>`;
 }
 
 function vSignup(){
-  const s=state.signup;const pct=[20,40,60,80,100][s.step]||20;
+  const s=state.signup;
+  const pct=[25,50,75,100][s.step]||25;
   let inner='';
   if(s.step===0){
     inner=`<h2>What brings you here?</h2><p class="sub">Isse hum aapko sirf relevant pages dikhayenge.</p>
       <div class="rolecard ${s.role==='seeker'?'sel':''}" onclick="pickRole('seeker')"><div class="re" style="background:var(--amber-soft)">👷</div><div><h3>I'm looking for jobs</h3><p>Apply to jobs & get paid guidance from seniors</p></div><div class="tick">✓</div></div>
       <div class="rolecard ${s.role==='poster'?'sel':''}" onclick="pickRole('poster')"><div class="re" style="background:#fdeaf4">🏗️</div><div><h3>I'm hiring / mentoring</h3><p>Post jobs, offer paid sessions & earn</p></div><div class="tick">✓</div></div>
-      <button class="btn btn-primary btn-block" style="margin-top:8px" onclick="suNext()">Continue</button>`;
+      <p class="sub" style="margin-top:20px;margin-bottom:0">Pehle se account hai? <span class="skiplink" onclick="route('login')" style="font-weight:700;color:var(--secondary-600);cursor:pointer">Log In karein</span></p>`;
   }else if(s.step===1){
-    inner=`<h2>Tell us about you</h2><p class="sub">Basic details for your profile.</p>
-      <div class="field"><label>Full name</label><input id="su-name" value="${s.name||''}" placeholder="e.g. Rohan Mehta"></div>
-      <div class="twocol"><div class="field"><label>City</label><input id="su-city" placeholder="Pune"></div><div class="field"><label>Mobile</label><input placeholder="+91 ........."></div></div>
-      <div class="field"><label>Email</label><input value="${s.email||''}" readonly style="background:#eaf0fb;cursor:not-allowed"></div>
-      <button class="btn btn-primary btn-block" onclick="suNext()">Continue</button>`;
+    if (state.signupOtpSent) {
+      inner=`<h2>Verify your Email ✉️</h2>
+        <p class="sub">We sent a 6-digit OTP to <b>${s.email}</b></p>
+        <div class="field">
+          <label>Enter Verification Code</label>
+          <input id="su-otp-code" type="text" maxlength="6" style="text-align:center;letter-spacing:6px;font-size:20px;font-weight:700" placeholder="000000">
+        </div>
+        <button class="btn btn-primary btn-block" onclick="verifySignupOTP(document.getElementById('su-otp-code').value.trim())">Verify & Continue</button>
+        <p class="skiplink" onclick="state.signupOtpSent=false;render()">← Change registration details</p>`;
+    } else {
+      const isGoogle = s.googleUser || false;
+      inner=`<h2>Tell us about you</h2><p class="sub">Basic details for your profile.</p>
+        <div class="field"><label>Full name</label><input id="su-name" value="${s.name||''}" placeholder="e.g. Rohan Mehta"></div>
+        <div class="twocol">
+          <div class="field"><label>City</label><input id="su-city" value="${s.city||''}" placeholder="Pune"></div>
+          <div class="field"><label>Mobile</label><input id="su-mobile" value="${s.mobile||''}" placeholder="+91 ........."></div>
+        </div>
+        <div class="field"><label>Email</label><input id="su-email" type="email" value="${s.email||''}" placeholder="name@email.com" ${isGoogle?'readonly style="background:#eaf0fb;cursor:not-allowed"':''}></div>
+        ${isGoogle ? '' : `
+        <div class="field"><label>Set 4-Digit Login PIN</label><input id="su-pin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="font-size:18px;letter-spacing:8px" value="${s.pin||''}"></div>
+        `}
+        <button class="btn btn-primary btn-block" onclick="${isGoogle?'proceedGoogleStep1()':'validateStep1AndProceed()'}">Continue</button>
+        ${isGoogle ? '' : `
+        <div class="ordiv">or</div>
+        <button class="slbtn btn-block" onclick="signupWithGoogle()" style="border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:12px;font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;width:100%">
+          <span class="gi" style="background:#fff;color:#4285F4;border:1px solid #ddd;padding:0 5px;border-radius:3px">G</span> Sign up with Google
+        </button>
+        `}
+        <p class="sub" style="margin-top:20px;margin-bottom:0">Pehle se account hai? <span class="skiplink" onclick="route('login')" style="font-weight:700;color:var(--secondary-600);cursor:pointer">Log In karein</span></p>`;
+    }
   }else if(s.step===2){
     if(s.role==='seeker'){
       inner=`<h2>Your profile</h2><p class="sub">Inse hum aapko sahi jobs & experts dikhayenge.</p>
@@ -1751,10 +1890,10 @@ function vSignup(){
   }else if(s.step===3){
     inner=`<h2>Your social presence</h2><p class="sub">Profiles link karo — credibility ke liye. (optional)</p>
       <div class="socnote">🔗 Civil community me content/profile dekhke connect karna easy hota hai.</div>
-      <div class="socrow"><div class="si" style="background:#0A66C2">in</div><input placeholder="LinkedIn profile URL"></div>
-      <div class="socrow"><div class="si" style="background:linear-gradient(135deg,#F58529,#DD2A7B,#8134AF)">📸</div><input placeholder="Instagram handle / URL"></div>
-      <div class="socrow"><div class="si" style="background:#FF0000">▶</div><input placeholder="YouTube channel"></div>
-      <div class="socrow"><div class="si" style="background:#0FA968">🌐</div><input placeholder="Portfolio / website"></div>
+      <div class="socrow"><div class="si" style="background:#0A66C2">in</div><input id="su-linkedin" placeholder="LinkedIn profile URL"></div>
+      <div class="socrow"><div class="si" style="background:linear-gradient(135deg,#F58529,#DD2A7B,#8134AF)">📸</div><input id="su-insta" placeholder="Instagram handle / URL"></div>
+      <div class="socrow"><div class="si" style="background:#FF0000">▶</div><input id="su-yt" placeholder="YouTube channel"></div>
+      <div class="socrow"><div class="si" style="background:#0FA968">🌐</div><input id="su-web" placeholder="Portfolio / website"></div>
       <button class="btn btn-primary btn-block" style="margin-top:6px" onclick="finishSignup()">Finish & build profile</button>
       <p class="skiplink" onclick="finishSignup()">Skip for now</p>`;
   }
@@ -1765,25 +1904,67 @@ function vSignup(){
     ${inner}
   </div></div>`;
 }
-function pickRole(r){state.signup.role=r;render()}
-function soloSeg(el){el.parentElement.querySelectorAll('.mchip').forEach(x=>x.classList.remove('sel'));el.classList.add('sel')}
-function toggleM(el,key,val){const arr=state.signup[key];const i=arr.indexOf(val);if(i>-1)arr.splice(i,1);else arr.push(val);el.classList.toggle('sel')}
-function suNext(){const s=state.signup;
+
+function proceedGoogleStep1() {
+  const name = (document.getElementById('su-name')?.value || '').trim();
+  const city = (document.getElementById('su-city')?.value || '').trim();
+  const mobile = (document.getElementById('su-mobile')?.value || '').trim();
+  
+  if (!name) { toast('Please enter your name'); return; }
+  if (!city) { toast('Please enter your city'); return; }
+  if (!mobile) { toast('Please enter your mobile number'); return; }
+  
+  state.signup.name = name;
+  state.signup.city = city;
+  state.signup.mobile = mobile;
+  
+  state.signup.step = 2;
+  render();
+}
+
+function pickRole(r){
+  state.signup.role=r;
+  suNext();
+}
+
+function soloSeg(el){
+  el.parentElement.querySelectorAll('.mchip').forEach(x=>x.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+function toggleM(el,key,val){
+  const arr=state.signup[key];
+  const i=arr.indexOf(val);
+  if(i>-1)arr.splice(i,1);
+  else arr.push(val);
+  el.classList.toggle('sel');
+}
+
+function suNext(){
+  const s=state.signup;
   if(s.step===0&&!s.role){toast('Pehle ek option chuno');return}
-  if(s.step===1){s.name=(document.getElementById('su-name').value||'').trim();}
-  s.step++;render();}
-function suBack(){state.signup.step--;render()}
+  s.step++;
+  render();
+}
+
+function suBack(){
+  state.signup.step--;
+  render();
+}
+
 function finishSignup(){
   const s=state.signup;
   const id=db.session || uid();
   const color=COLORS[Math.floor(Math.random()*COLORS.length)];
   const name=s.name||(s.role==='seeker'?'New Engineer':'New Mentor');
   const email=s.email || '';
+  const pin=s.pin || '';
+  const city=s.city || '';
   
   let profile;
   if(s.role==='seeker'){
     profile = {
-      id, role:'seeker', email, name, city:document.getElementById('su-city')?.value||'',
+      id, role:'seeker', email, name, city, pin,
       exp:'0–2 yrs', title:document.getElementById('su-title')?.value||'Civil Engineer',
       skills:s.skills, color, verified:false, blocked:false, social:{}
     };
@@ -1791,10 +1972,18 @@ function finishSignup(){
     const svc=[];const map={'📞 10-min Call':{n:'10-min Career Call',d:'Quick guidance',p:299,i:'📞',bg:'var(--amber-soft)'},'📄 Resume Review':{n:'Resume Review',d:'Detailed feedback',p:499,i:'📄',bg:'#eaf0fb'},'🎯 Skill Check':{n:'Skill Check / Mock',d:'Technical evaluation',p:699,i:'🎯',bg:'var(--green-soft)'}};
     (s.services.length?s.services:['📞 10-min Call']).forEach(x=>{const m=map[x];svc.push({id:uid(),name:m.n,desc:m.d,price:m.p,icon:m.i,bg:m.bg,on:true})});
     profile = {
-      id, role:'poster', email, name, company:document.getElementById('su-company')?.value||'',
-      designation:document.getElementById('su-desig')?.value||'Civil Engineer', city:document.getElementById('su-city')?.value||'',
+      id, role:'poster', email, name, company:document.getElementById('su-company')?.value||'', pin,
+      designation:document.getElementById('su-desig')?.value||'Civil Engineer', city,
       exp:'5–10 yrs', skills:s.skills, color, verified:false, blocked:false, services:svc, social:{}
     };
+  }
+
+  const li = document.getElementById('su-linkedin')?.value || '';
+  const ins = document.getElementById('su-insta')?.value || '';
+  const yt = document.getElementById('su-yt')?.value || '';
+  const web = document.getElementById('su-web')?.value || '';
+  if (li || ins || yt || web) {
+    profile.social = { linkedin: li, insta: ins, yt: yt, website: web };
   }
 
   const idx=db.users.findIndex(x=>x.id===id);
@@ -1805,16 +1994,16 @@ function finishSignup(){
 
   if(firebaseActive){
     firestore.collection('users').doc(id).set(profile).then(()=>{
-      state.signup={step:0,role:null,skills:[],services:[],name:'',email:''};
+      state.signup={step:0,role:null,skills:[],services:[],name:'',email:'',pin:'',city:'',mobile:'',googleUser:false};
       login(id);
       toast('Welcome to WORKORA 🎉');
     }).catch(err=>{
       console.error('Firestore save failed:', err);
-      state.signup={step:0,role:null,skills:[],services:[],name:'',email:''};
+      state.signup={step:0,role:null,skills:[],services:[],name:'',email:'',pin:'',city:'',mobile:'',googleUser:false};
       login(id);
     });
   } else {
-    state.signup={step:0,role:null,skills:[],services:[],name:'',email:''};
+    state.signup={step:0,role:null,skills:[],services:[],name:'',email:'',pin:'',city:'',mobile:'',googleUser:false};
     login(id);
     toast('Welcome to WORKORA 🎉');
   }
